@@ -10,15 +10,20 @@
 #import <Foundation/Foundation.h>
 
 #import "RCTDefines.h"
-#import "RCTBridgeModule.h"
 
 typedef NS_ENUM(NSUInteger, RCTPLTag) {
   RCTPLScriptDownload = 0,
-  RCTPLAppScriptExecution,
+  RCTPLScriptExecution,
+  RCTPLNativeModuleInit,
+  RCTPLNativeModulePrepareConfig,
+  RCTPLNativeModuleInjectConfig,
   RCTPLTTI,
+  RCTPLBundleSize,
   RCTPLSize
 };
 
 void RCTPerformanceLoggerStart(RCTPLTag tag);
 void RCTPerformanceLoggerEnd(RCTPLTag tag);
-NSArray *RCTPerformanceLoggerOutput(void);
+void RCTPerformanceLoggerSet(RCTPLTag tag, int64_t value);
+NSArray<NSNumber *> *RCTPerformanceLoggerOutput(void);
+NSArray *RCTPerformanceLoggerLabels(void);

@@ -24,74 +24,93 @@ var {
   AlertIOS,
 } = React;
 
+var { SimpleAlertExampleBlock } = require('./AlertExample');
+
 exports.framework = 'React';
 exports.title = 'AlertIOS';
 exports.description = 'iOS alerts and action sheets';
 exports.examples = [{
   title: 'Alerts',
   render() {
+    return <SimpleAlertExampleBlock />;
+  }
+},
+{
+  title: 'Alert Types',
+  render() {
     return (
       <View>
-        <TouchableHighlight style={styles.wrapper}
+        <TouchableHighlight
+          style={styles.wrapper}
           onPress={() => AlertIOS.alert(
-            'Foo Title',
-            'My Alert Msg'
-          )}>
-          <View style={styles.button}>
-            <Text>Alert with message and default button</Text>
-          </View>
-        </TouchableHighlight>
-        <TouchableHighlight style={styles.wrapper}
-          onPress={() => AlertIOS.alert(
-            null,
+            'Hello World',
             null,
             [
-              {text: 'Button', onPress: () => console.log('Button Pressed!')},
-            ]
+              {text: 'OK', onPress: (text) => console.log('OK pressed')},
+            ],
+            'default'
           )}>
+
           <View style={styles.button}>
-            <Text>Alert with only one button</Text>
+            <Text>
+              {'default'}
+            </Text>
           </View>
+          
         </TouchableHighlight>
-        <TouchableHighlight style={styles.wrapper}
+        <TouchableHighlight
+          style={styles.wrapper}
           onPress={() => AlertIOS.alert(
-            'Foo Title',
-            'My Alert Msg',
-            [
-              {text: 'Foo', onPress: () => console.log('Foo Pressed!')},
-              {text: 'Bar', onPress: () => console.log('Bar Pressed!')},
-            ]
-          )}>
-          <View style={styles.button}>
-            <Text>Alert with two buttons</Text>
-          </View>
-        </TouchableHighlight>
-        <TouchableHighlight style={styles.wrapper}
-          onPress={() => AlertIOS.alert(
-            'Foo Title',
+            'Plain Text Entry',
             null,
             [
-              {text: 'Foo', onPress: () => console.log('Foo Pressed!')},
-              {text: 'Bar', onPress: () => console.log('Bar Pressed!')},
-              {text: 'Baz', onPress: () => console.log('Baz Pressed!')},
-            ]
+              {text: 'Submit', onPress: (text) => console.log('Text: ' + text)},
+            ],
+            'plain-text'
           )}>
+
           <View style={styles.button}>
-            <Text>Alert with 3 buttons</Text>
+            <Text>
+              plain-text
+            </Text>
           </View>
+          
         </TouchableHighlight>
-        <TouchableHighlight style={styles.wrapper}
+        <TouchableHighlight
+          style={styles.wrapper}
           onPress={() => AlertIOS.alert(
-            'Foo Title',
-            'My Alert Msg',
-            '..............'.split('').map((dot, index) => ({
-              text: 'Button ' + index,
-              onPress: () => console.log('Pressed ' + index)
-            }))
+            'Secure Text Entry',
+            null,
+            [
+              {text: 'Submit', onPress: (text) => console.log('Password: ' + text)},
+            ],
+            'secure-text'
           )}>
+
           <View style={styles.button}>
-            <Text>Alert with too many buttons</Text>
+            <Text>
+              secure-text
+            </Text>
           </View>
+          
+        </TouchableHighlight>
+        <TouchableHighlight
+          style={styles.wrapper}
+          onPress={() => AlertIOS.alert(
+            'Login & Password',
+            null,
+            [
+              {text: 'Submit', onPress: (details) => console.log('Login: ' + details.login + '; Password: ' + details.password)},
+            ],
+            'login-password'
+          )}>
+
+          <View style={styles.button}>
+            <Text>
+              login-password
+            </Text>
+          </View>
+          
         </TouchableHighlight>
       </View>
     );
@@ -116,10 +135,11 @@ class PromptExample extends React.Component {
     this.title = 'Type a value';
     this.defaultValue = 'Default value';
     this.buttons = [{
-      text: 'Custom cancel',
-    }, {
       text: 'Custom OK',
       onPress: this.promptResponse
+    }, {
+      text: 'Custom Cancel',
+      style: 'cancel',
     }];
   }
 
@@ -132,7 +152,7 @@ class PromptExample extends React.Component {
 
         <TouchableHighlight
           style={styles.wrapper}
-          onPress={this.prompt.bind(this, this.title, this.promptResponse)}>
+          onPress={this.prompt.bind(this, this.title, null, null, this.promptResponse)}>
 
           <View style={styles.button}>
             <Text>
@@ -143,7 +163,7 @@ class PromptExample extends React.Component {
 
         <TouchableHighlight
           style={styles.wrapper}
-          onPress={this.prompt.bind(this, this.title, this.buttons)}>
+          onPress={this.prompt.bind(this, this.title, null, this.buttons, null)}>
 
           <View style={styles.button}>
             <Text>
@@ -154,7 +174,7 @@ class PromptExample extends React.Component {
 
         <TouchableHighlight
           style={styles.wrapper}
-          onPress={this.prompt.bind(this, this.title, this.defaultValue, this.promptResponse)}>
+          onPress={this.prompt.bind(this, this.title, this.defaultValue, null, this.promptResponse)}>
 
           <View style={styles.button}>
             <Text>
@@ -165,7 +185,7 @@ class PromptExample extends React.Component {
 
         <TouchableHighlight
           style={styles.wrapper}
-          onPress={this.prompt.bind(this, this.title, this.defaultValue, this.buttons)}>
+          onPress={this.prompt.bind(this, this.title, this.defaultValue, this.buttons, null)}>
 
           <View style={styles.button}>
             <Text>

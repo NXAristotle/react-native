@@ -1,4 +1,16 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/**
+ * The examples provided by Facebook are for non-commercial testing and
+ * evaluation purposes only.
+ *
+ * Facebook reserves all rights not expressly granted.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NON INFRINGEMENT. IN NO EVENT SHALL
+ * FACEBOOK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #import <XCTest/XCTest.h>
 
@@ -71,7 +83,8 @@
   [parentView insertReactSubview:mainView atIndex:1];
   [parentView insertReactSubview:footerView atIndex:2];
 
-  [parentView collectRootUpdatedFrames:nil parentConstraint:CGSizeZero];
+  parentView.reactTag = @1; // must be valid rootView tag
+  [parentView collectRootUpdatedFrames];
 
   XCTAssertTrue(CGRectEqualToRect([parentView measureLayoutRelativeToAncestor:parentView], CGRectMake(0, 0, 440, 440)));
   XCTAssertTrue(UIEdgeInsetsEqualToEdgeInsets([parentView paddingAsInsets], UIEdgeInsetsMake(10, 10, 10, 10)));
@@ -87,7 +100,7 @@
 
 - (RCTShadowView *)_shadowViewWithStyle:(void(^)(css_style_t *style))styleBlock
 {
-  RCTShadowView *shadowView = [[RCTShadowView alloc] init];
+  RCTShadowView *shadowView = [RCTShadowView new];
 
   css_style_t style = shadowView.cssNode->style;
   styleBlock(&style);

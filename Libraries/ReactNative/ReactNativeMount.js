@@ -11,13 +11,13 @@
  */
 'use strict';
 
-var RCTUIManager = require('NativeModules').UIManager;
-
+var ReactElement = require('ReactElement');
 var ReactNativeTagHandles = require('ReactNativeTagHandles');
 var ReactPerf = require('ReactPerf');
 var ReactReconciler = require('ReactReconciler');
 var ReactUpdateQueue = require('ReactUpdateQueue');
 var ReactUpdates = require('ReactUpdates');
+var UIManager = require('UIManager');
 
 var emptyObject = require('emptyObject');
 var instantiateReactComponent = require('instantiateReactComponent');
@@ -26,6 +26,21 @@ var shouldUpdateReactComponent = require('shouldUpdateReactComponent');
 function instanceNumberToChildRootID(rootNodeID, instanceNumber) {
   return rootNodeID + '[' + instanceNumber + ']';
 }
+
+/**
+ * Temporary (?) hack so that we can store all top-level pending updates on
+ * composites instead of having to worry about different types of components
+ * here.
+ */
+var TopLevelWrapper = function() {};
+TopLevelWrapper.prototype.isReactComponent = {};
+if (__DEV__) {
+  TopLevelWrapper.displayName = 'TopLevelWrapper';
+}
+TopLevelWrapper.prototype.render = function() {
+  // this.props is actually a ReactElement
+  return this.props;
+};
 
 /**
  * Mounts this component and inserts it into the DOM.
@@ -43,7 +58,7 @@ function mountComponentIntoNode(
   var markup = ReactReconciler.mountComponent(
     componentInstance, rootID, transaction, emptyObject
   );
-  componentInstance._isTopLevel = true;
+  componentInstance._renderedComponent._topLevelWrapper = componentInstance;
   ReactNativeMount._mountImageIntoNode(markup, container);
 }
 
@@ -79,6 +94,12 @@ var ReactNativeMount = {
 
   _instancesByContainerID: {},
 
+  // these two functions are needed by React Devtools
+  findNodeHandle: require('findNodeHandle'),
+  nativeTagToRootNodeID: function (nativeTag: number): string {
+    return ReactNativeTagHandles.tagToRootNodeID[nativeTag];
+  },
+
   /**
    * @param {ReactComponent} instance Instance to render.
    * @param {containerTag} containerView Handle to native view tag
@@ -88,13 +109,24 @@ var ReactNativeMount = {
     containerTag: number,
     callback?: ?(() => void)
   ): ?ReactComponent {
+    var nextWrappedElement = new ReactElement(
+      TopLevelWrapper,
+      null,
+      null,
+      null,
+      null,
+      null,
+      nextElement
+    );
+
     var topRootNodeID = ReactNativeTagHandles.tagToRootNodeID[containerTag];
     if (topRootNodeID) {
       var prevComponent = ReactNativeMount._instancesByContainerID[topRootNodeID];
       if (prevComponent) {
-        var prevElement = prevComponent._currentElement;
+        var prevWrappedElement = prevComponent._currentElement;
+        var prevElement = prevWrappedElement.props;
         if (shouldUpdateReactComponent(prevElement, nextElement)) {
-          ReactUpdateQueue.enqueueElementInternal(prevComponent, nextElement);
+          ReactUpdateQueue.enqueueElementInternal(prevComponent, nextWrappedElement);
           if (callback) {
             ReactUpdateQueue.enqueueCallbackInternal(prevComponent, callback);
           }
@@ -116,7 +148,7 @@ var ReactNativeMount = {
       containerTag
     );
 
-    var instance = instantiateReactComponent(nextElement);
+    var instance = instantiateReactComponent(nextWrappedElement);
     ReactNativeMount._instancesByContainerID[topRootNodeID] = instance;
 
     var childRootNodeID = instanceNumberToChildRootID(
@@ -156,15 +188,9 @@ var ReactNativeMount = {
         mountImage.rootNodeID,
         mountImage.tag
       );
-      var addChildTags = [mountImage.tag];
-      var addAtIndices = [0];
-      RCTUIManager.manageChildren(
+      UIManager.setChildren(
         ReactNativeTagHandles.mostRecentMountedNodeHandleForRootNodeID(containerID),
-        null,         // moveFromIndices
-        null,         // moveToIndices
-        addChildTags,
-        addAtIndices,
-        null          // removeAtIndices
+        [mountImage.tag]
       );
     }
   ),
@@ -182,7 +208,7 @@ var ReactNativeMount = {
   ) {
     ReactNativeMount.unmountComponentAtNode(containerTag);
     // call back into native to remove all of the subviews from this container
-    RCTUIManager.removeRootView(containerTag);
+    UIManager.removeRootView(containerTag);
   },
 
   /**
@@ -223,11 +249,15 @@ var ReactNativeMount = {
     ReactReconciler.unmountComponent(instance);
     var containerTag =
       ReactNativeTagHandles.mostRecentMountedNodeHandleForRootNodeID(containerID);
-    RCTUIManager.removeSubviewsFromContainerWithID(containerTag);
+    UIManager.removeSubviewsFromContainerWithID(containerTag);
   },
 
-  getNode: function<T>(id: T): T {
-    return id;
+  getNode: function(rootNodeID: string): number {
+    return ReactNativeTagHandles.rootNodeIDToTag[rootNodeID];
+  },
+
+  getID: function(nativeTag: number): string {
+    return ReactNativeTagHandles.tagToRootNodeID[nativeTag];
   }
 };
 

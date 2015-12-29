@@ -1,10 +1,10 @@
 ---
-id: nativemodulesios
-title: Native Modules (iOS)
+id: native-modules-ios
+title: Native Modules
 layout: docs
-category: Guides
-permalink: docs/nativemodulesios.html
-next: nativecomponentsios
+category: Guides (iOS)
+permalink: docs/native-modules-ios.html
+next: native-components-ios
 ---
 
 Sometimes an app needs access to platform API, and React Native doesn't have a corresponding module yet. Maybe you want to reuse some existing Objective-C, Swift or C++ code without having to reimplement it in JavaScript, or write some high performance, multi-threaded code such as for image processing, a database, or any number of advanced extensions.
@@ -103,7 +103,7 @@ RCT_EXPORT_METHOD(addEvent:(NSString *)name location:(NSString *)location date:(
 You would then call this from JavaScript by using either:
 
 ```javascript
-CalendarManager.addEvent('Birthday Party', '4 Privet Drive, Surrey', date.toTime()); // passing date as number of seconds since Unix epoch
+CalendarManager.addEvent('Birthday Party', '4 Privet Drive, Surrey', date.getTime()); // passing date as number of seconds since Unix epoch
 ```
 
 or
@@ -173,6 +173,42 @@ A native module is supposed to invoke its callback only once. It can, however, s
 
 If you want to pass error-like objects to JavaScript, use `RCTMakeError` from [`RCTUtils.h`](https://github.com/facebook/react-native/blob/master/React/Base/RCTUtils.h).  Right now this just passes an Error-shaped dictionary to JavaScript, but we would like to automatically generate real JavaScript `Error` objects in the future.
 
+## Promises
+
+Native modules can also fulfill a promise, which can simplify your code, especially when using ES2016's `async/await` syntax. When the last parameters of a bridged native method are an `RCTPromiseResolveBlock` and `RCTPromiseRejectBlock`, its corresponding JS method will return a JS Promise object.
+
+Refactoring the above code to use a promise instead of callbacks looks like this:
+
+```objective-c
+RCT_REMAP_METHOD(findEvents,
+                 resolver:(RCTPromiseResolveBlock)resolve
+                 rejecter:(RCTPromiseRejectBlock)reject)
+{
+  NSArray *events = ...
+  if (events) {
+    resolve(events);
+  } else {
+    reject(error);
+  }
+}
+```
+
+The JavaScript counterpart of this method returns a Promise. This means you can use the `await` keyword within an async function to call it and wait for its result:
+
+```js
+async function updateEvents() {
+  try {
+    var events = await CalendarManager.findEvents();
+
+    this.setState({ events });
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+updateEvents();
+```
+
 ## Threading
 
 The native module should not have any assumptions about what thread it is being called on. React Native invokes native modules methods on a separate serial GCD queue, but this is an implementation detail and might change.  The `- (dispatch_queue_t)methodQueue` method allows the native module to specify which queue its methods should be run on.  For example, if it needs to use a main-thread-only iOS API, it should specify this via:
@@ -229,6 +265,47 @@ console.log(CalendarManager.firstDayOfTheWeek);
 ```
 
 Note that the constants are exported only at initialization time, so if you change `constantsToExport` values at runtime it won't affect the JavaScript environment.
+
+### Enum Constants
+
+Enums that are defined via `NS_ENUM` cannot be used as method arguments without first extending RCTConvert.
+
+In order to export the following `NS_ENUM` definition:
+
+```objc
+typedef NS_ENUM(NSInteger, UIStatusBarAnimation) {
+    UIStatusBarAnimationNone,
+    UIStatusBarAnimationFade,
+    UIStatusBarAnimationSlide,
+};
+```
+
+You must create a class extension of RCTConvert like so:
+
+```objc
+@implementation RCTConvert (StatusBarAnimation)
+  RCT_ENUM_CONVERTER(UIStatusBarAnimation, (@{ @"statusBarAnimationNone" : @(UIStatusBarAnimationNone),
+                                               @"statusBarAnimationFade" : @(UIStatusBarAnimationFade),
+                                               @"statusBarAnimationSlide" : @(UIStatusBarAnimationSlide)},
+                      UIStatusBarAnimationNone, integerValue)
+@end
+```
+
+You can then define methods and export your enum constants like this:
+
+```objc
+- (NSDictionary *)constantsToExport
+{
+  return @{ @"statusBarAnimationNone" : @(UIStatusBarAnimationNone),
+            @"statusBarAnimationFade" : @(UIStatusBarAnimationFade),
+            @"statusBarAnimationSlide" : @(UIStatusBarAnimationSlide) }
+};
+
+RCT_EXPORT_METHOD(updateStatusBarAnimation:(UIStatusBarAnimation)animation
+                                completion:(RCTResponseSenderBlock)callback)
+```
+
+Your enum will then be automatically unwrapped using the selector provided (`integerValue` in the above example) before being passed to your exported method.
 
 
 ## Sending Events to JavaScript
@@ -297,7 +374,7 @@ Then create a private implementation file that will register the required inform
 
 @interface RCT_EXTERN_MODULE(CalendarManager, NSObject)
 
-RCT_EXTERN_METHOD(addEvent:(NSString *)name location:(NSString *)location date:(NSNumber *)date)
+RCT_EXTERN_METHOD(addEvent:(NSString *)name location:(NSString *)location date:(nonnull NSNumber *)date)
 
 @end
 ```

@@ -1,14 +1,21 @@
+/**
+ * Copyright (c) 2015-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 'use strict';
 
-const Promise = require('promise');
 const docblock = require('./DependencyGraph/docblock');
 const isAbsolutePath = require('absolute-path');
 const path = require('path');
-const replacePatterns = require('./replacePatterns');
+const extractRequires = require('./lib/extractRequires');
 
 class Module {
 
-  constructor(file, fastfs, moduleCache) {
+  constructor({ file, fastfs, moduleCache, cache, extractor, depGraphHelpers }) {
     if (!isAbsolutePath(file)) {
       throw new Error('Expected file to be absolute path but got ' + file);
     }
@@ -18,34 +25,41 @@ class Module {
 
     this._fastfs = fastfs;
     this._moduleCache = moduleCache;
+    this._cache = cache;
+    this._extractor = extractor;
+    this._depGraphHelpers = depGraphHelpers;
   }
 
   isHaste() {
-    return this._read().then(data => !!data.id);
+    return this.read().then(data => !!data.id);
   }
 
   getName() {
-    return this._read().then(data => {
-      if (data.id) {
-        return data.id;
-      }
+    return this._cache.get(
+      this.path,
+      'name',
+      () => this.read().then(data => {
+        if (data.id) {
+          return data.id;
+        }
 
-      const p = this.getPackage();
+        const p = this.getPackage();
 
-      if (!p) {
-        // Name is full path
-        return this.path;
-      }
+        if (!p) {
+          // Name is full path
+          return this.path;
+        }
 
-      return p.getName()
-        .then(name => {
-          if (!name) {
-            return this.path;
-          }
+        return p.getName()
+          .then(name => {
+            if (!name) {
+              return this.path;
+            }
 
-          return path.join(name, path.relative(p.root, this.path));
-        });
-    });
+            return path.join(name, path.relative(p.root, this.path)).replace(/\\/g, '/');
+          });
+      })
+    );
   }
 
   getPackage() {
@@ -53,15 +67,31 @@ class Module {
   }
 
   getDependencies() {
-    return this._read().then(data => data.dependencies);
+    return this.read().then(data => data.dependencies);
   }
 
-  _read() {
+  getAsyncDependencies() {
+    return this.read().then(data => data.asyncDependencies);
+  }
+
+  invalidate() {
+    this._cache.invalidate(this.path);
+  }
+
+  read() {
     if (!this._reading) {
       this._reading = this._fastfs.readFile(this.path).then(content => {
         const data = {};
+
+        // Set an id on the module if it's using @providesModule syntax
+        // and if it's NOT in node_modules (and not a whitelisted node_module).
+        // This handles the case where a project may have a dep that has @providesModule
+        // docblock comments, but doesn't want it to conflict with whitelisted @providesModule
+        // modules, such as react-haste, fbjs-haste, or react-native or with non-dependency,
+        // project-specific code that is using @providesModule.
         const moduleDocBlock = docblock.parseAsObject(content);
-        if (moduleDocBlock.providesModule || moduleDocBlock.provides) {
+        if (!this._depGraphHelpers.isNodeModulesDir(this.path) &&
+            (moduleDocBlock.providesModule || moduleDocBlock.provides)) {
           data.id = /^(\S*)/.exec(
             moduleDocBlock.providesModule || moduleDocBlock.provides
           )[1];
@@ -72,7 +102,9 @@ class Module {
         if ('extern' in moduleDocBlock) {
           data.dependencies = [];
         } else {
-          data.dependencies = extractRequires(content);
+          var dependencies = (this._extractor || extractRequires)(content).deps;
+          data.dependencies = dependencies.sync;
+          data.asyncDependencies = dependencies.async;
         }
 
         return data;
@@ -82,52 +114,36 @@ class Module {
     return this._reading;
   }
 
-  getPlainObject() {
-    return Promise.all([
-      this.getName(),
-      this.getDependencies(),
-    ]).then(([name, dependencies]) => this.addReference({
-      path: this.path,
-      isJSON: path.extname(this.path) === '.json',
-      isAsset: false,
-      isAsset_DEPRECATED: false,
-      isPolyfill: false,
-      resolution: undefined,
-      id: name,
-      dependencies
-    }));
-  }
-
   hash() {
     return `Module : ${this.path}`;
   }
 
-  addReference(obj) {
-    Object.defineProperty(obj, '_ref', { value: this });
-    return obj;
+  isJSON() {
+    return path.extname(this.path) === '.json';
   }
-}
 
-/**
- * Extract all required modules from a `code` string.
- */
-var blockCommentRe = /\/\*(.|\n)*?\*\//g;
-var lineCommentRe = /\/\/.+(\n|$)/g;
-function extractRequires(code /*: string*/) /*: Array<string>*/ {
-  var deps = [];
+  isAsset() {
+    return false;
+  }
 
-  code
-    .replace(blockCommentRe, '')
-    .replace(lineCommentRe, '')
-    .replace(replacePatterns.IMPORT_RE, (match, pre, quot, dep, post) => {
-      deps.push(dep);
-      return match;
-    })
-    .replace(replacePatterns.REQUIRE_RE, function(match, pre, quot, dep, post) {
-      deps.push(dep);
-    });
+  isPolyfill() {
+    return false;
+  }
 
-  return deps;
+  isAsset_DEPRECATED() {
+    return false;
+  }
+
+  toJSON() {
+    return {
+      hash: this.hash(),
+      isJSON: this.isJSON(),
+      isAsset: this.isAsset(),
+      isAsset_DEPRECATED: this.isAsset_DEPRECATED(),
+      type: this.type,
+      path: this.path,
+    };
+  }
 }
 
 module.exports = Module;

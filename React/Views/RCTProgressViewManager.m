@@ -26,7 +26,7 @@ RCT_EXPORT_MODULE()
 
 - (UIView *)view
 {
-  return [[UIProgressView alloc] init];
+  return [UIProgressView new];
 }
 
 RCT_EXPORT_VIEW_PROPERTY(progressViewStyle, UIProgressViewStyle)
@@ -36,9 +36,9 @@ RCT_EXPORT_VIEW_PROPERTY(trackTintColor, UIColor)
 RCT_EXPORT_VIEW_PROPERTY(progressImage, UIImage)
 RCT_EXPORT_VIEW_PROPERTY(trackImage, UIImage)
 
-- (NSDictionary *)constantsToExport
+- (NSDictionary<NSString *, id> *)constantsToExport
 {
-  UIProgressView *view = [[UIProgressView alloc] init];
+  UIProgressView *view = [UIProgressView new];
   return @{
     @"ComponentHeight": @(view.intrinsicContentSize.height),
   };

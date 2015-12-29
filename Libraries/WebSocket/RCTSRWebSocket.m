@@ -53,14 +53,14 @@ static inline void RCTSRFastLog(NSString *format, ...);
 
 @interface NSData (RCTSRWebSocket)
 
-- (NSString *)stringBySHA1ThenBase64Encoding;
+@property (nonatomic, readonly, copy) NSString *stringBySHA1ThenBase64Encoding;
 
 @end
 
 
 @interface NSString (RCTSRWebSocket)
 
-- (NSString *)stringBySHA1ThenBase64Encoding;
+@property (nonatomic, readonly, copy) NSString *stringBySHA1ThenBase64Encoding;
 
 @end
 
@@ -69,7 +69,7 @@ static inline void RCTSRFastLog(NSString *format, ...);
 
 // The origin isn't really applicable for a native application.
 // So instead, just map ws -> http and wss -> https.
-- (NSString *)RCTSR_origin;
+@property (nonatomic, readonly, copy) NSString *RCTSR_origin;
 
 @end
 
@@ -186,7 +186,7 @@ typedef void (^data_callback)(RCTSRWebSocket *webSocket,  NSData *data);
   dispatch_queue_t _delegateDispatchQueue;
 
   dispatch_queue_t _workQueue;
-  NSMutableArray *_consumers;
+  NSMutableArray<RCTSRIOConsumer *> *_consumers;
 
   NSInputStream *_inputStream;
   NSOutputStream *_outputStream;
@@ -228,12 +228,12 @@ typedef void (^data_callback)(RCTSRWebSocket *webSocket,  NSData *data);
 
   BOOL _isPumping;
 
-  NSMutableSet *_scheduledRunloops;
+  NSMutableSet<NSArray *> *_scheduledRunloops;
 
   // We use this to retain ourselves.
   __strong RCTSRWebSocket *_selfRetain;
 
-  NSArray *_requestedProtocols;
+  NSArray<NSString *> *_requestedProtocols;
   RCTSRIOConsumerPool *_consumerPool;
 }
 
@@ -244,7 +244,7 @@ static __strong NSData *CRLFCRLF;
   CRLFCRLF = [[NSData alloc] initWithBytes:"\r\n\r\n" length:4];
 }
 
-- (instancetype)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray *)protocols;
+- (instancetype)initWithURLRequest:(NSURLRequest *)request protocols:(NSArray<NSString *> *)protocols;
 {
   RCTAssertParam(request);
 
@@ -259,7 +259,7 @@ static __strong NSData *CRLFCRLF;
   return self;
 }
 
-RCT_NOT_IMPLEMENTED(-init)
+RCT_NOT_IMPLEMENTED(- (instancetype)init)
 
 - (instancetype)initWithURLRequest:(NSURLRequest *)request;
 {
@@ -271,7 +271,7 @@ RCT_NOT_IMPLEMENTED(-init)
   return [self initWithURL:URL protocols:nil];
 }
 
-- (instancetype)initWithURL:(NSURL *)URL protocols:(NSArray *)protocols;
+- (instancetype)initWithURL:(NSURL *)URL protocols:(NSArray<NSString *> *)protocols;
 {
   NSURLRequest *request = URL ? [NSURLRequest requestWithURL:URL] : nil;
   return [self initWithURLRequest:request protocols:protocols];
@@ -297,16 +297,16 @@ RCT_NOT_IMPLEMENTED(-init)
 
   _delegateDispatchQueue = dispatch_get_main_queue();
 
-  _readBuffer = [[NSMutableData alloc] init];
-  _outputBuffer = [[NSMutableData alloc] init];
+  _readBuffer = [NSMutableData new];
+  _outputBuffer = [NSMutableData new];
 
-  _currentFrameData = [[NSMutableData alloc] init];
+  _currentFrameData = [NSMutableData new];
 
-  _consumers = [[NSMutableArray alloc] init];
+  _consumers = [NSMutableArray new];
 
-  _consumerPool = [[RCTSRIOConsumerPool alloc] init];
+  _consumerPool = [RCTSRIOConsumerPool new];
 
-  _scheduledRunloops = [[NSMutableSet alloc] init];
+  _scheduledRunloops = [NSMutableSet new];
 
   [self _initializeStreams];
 
@@ -506,12 +506,12 @@ RCT_NOT_IMPLEMENTED(-init)
 
 
   if (_secure) {
-    NSMutableDictionary *SSLOptions = [[NSMutableDictionary alloc] init];
+    NSMutableDictionary<NSString *, id> *SSLOptions = [NSMutableDictionary new];
 
     [_outputStream setProperty:(__bridge id)kCFStreamSocketSecurityLevelNegotiatedSSL forKey:(__bridge id)kCFStreamPropertySocketSecurityLevel];
 
     // If we're using pinned certs, don't validate the certificate chain
-    if ([_urlRequest RCTSR_SSLPinnedCertificates].count) {
+    if (_urlRequest.RCTSR_SSLPinnedCertificates.count) {
       [SSLOptions setValue:@NO forKey:(__bridge id)kCFStreamSSLValidatesCertificateChain];
     }
 
@@ -998,7 +998,7 @@ static const uint8_t RCTSRPayloadLenMask   = 0x7F;
 - (void)_readFrameNew;
 {
   dispatch_async(_workQueue, ^{
-    [_currentFrameData setLength:0];
+    _currentFrameData.length = 0;
 
     _currentFrameOpcode = 0;
     _currentFrameCount = 0;
@@ -1253,7 +1253,7 @@ static const size_t RCTSRFrameHeaderOverhead = 32;
     [self closeWithCode:RCTSRStatusCodeMessageTooBig reason:@"Message too big"];
     return;
   }
-  uint8_t *frame_buffer = (uint8_t *)[frame mutableBytes];
+  uint8_t *frame_buffer = (uint8_t *)frame.mutableBytes;
 
   // set fin
   frame_buffer[0] = RCTSRFinMask | opcode;
@@ -1318,7 +1318,7 @@ static const size_t RCTSRFrameHeaderOverhead = 32;
 {
   if (_secure && !_pinnedCertFound && (eventCode == NSStreamEventHasBytesAvailable || eventCode == NSStreamEventHasSpaceAvailable)) {
 
-    NSArray *sslCerts = [_urlRequest RCTSR_SSLPinnedCertificates];
+    NSArray *sslCerts = _urlRequest.RCTSR_SSLPinnedCertificates;
     if (sslCerts) {
       SecTrustRef secTrust = (__bridge SecTrustRef)[aStream propertyForKey:(__bridge id)kCFStreamPropertySSLPeerTrust];
       if (secTrust) {
@@ -1366,11 +1366,11 @@ static const size_t RCTSRFrameHeaderOverhead = 32;
       }
 
       case NSStreamEventErrorOccurred: {
-        RCTSRFastLog(@"NSStreamEventErrorOccurred %@ %@", aStream, [[aStream streamError] copy]);
+        RCTSRFastLog(@"NSStreamEventErrorOccurred %@ %@", aStream, [aStream.streamError copy]);
         // TODO: specify error better!
         [self _failWithError:aStream.streamError];
         _readBufferOffset = 0;
-        [_readBuffer setLength:0];
+        _readBuffer.length = 0;
         break;
 
       }
@@ -1381,20 +1381,22 @@ static const size_t RCTSRFrameHeaderOverhead = 32;
         if (aStream.streamError) {
           [self _failWithError:aStream.streamError];
         } else {
-          if (self.readyState != RCTSR_CLOSED) {
-            self.readyState = RCTSR_CLOSED;
-            _selfRetain = nil;
-          }
+          dispatch_async(_workQueue, ^{
+            if (self.readyState != RCTSR_CLOSED) {
+              self.readyState = RCTSR_CLOSED;
+              _selfRetain = nil;
+            }
 
-          if (!_sentClose && !_failed) {
-            _sentClose = YES;
-            // If we get closed in this state it's probably not clean because we should be sending this when we send messages
-            [self _performDelegateBlock:^{
-              if ([self.delegate respondsToSelector:@selector(webSocket:didCloseWithCode:reason:wasClean:)]) {
-                [self.delegate webSocket:self didCloseWithCode:RCTSRStatusCodeGoingAway reason:@"Stream end encountered" wasClean:NO];
-              }
-            }];
-          }
+            if (!_sentClose && !_failed) {
+              _sentClose = YES;
+              // If we get closed in this state it's probably not clean because we should be sending this when we send messages
+              [self _performDelegateBlock:^{
+                if ([self.delegate respondsToSelector:@selector(webSocket:didCloseWithCode:reason:wasClean:)]) {
+                  [self.delegate webSocket:self didCloseWithCode:RCTSRStatusCodeGoingAway reason:@"Stream end encountered" wasClean:NO];
+                }
+              }];
+            }
+          });
         }
 
         break;
@@ -1454,7 +1456,7 @@ static const size_t RCTSRFrameHeaderOverhead = 32;
 @implementation RCTSRIOConsumerPool
 {
   NSUInteger _poolSize;
-  NSMutableArray *_bufferedConsumers;
+  NSMutableArray<RCTSRIOConsumer *> *_bufferedConsumers;
 }
 
 - (instancetype)initWithBufferCapacity:(NSUInteger)poolSize;
@@ -1475,10 +1477,10 @@ static const size_t RCTSRFrameHeaderOverhead = 32;
 {
   RCTSRIOConsumer *consumer = nil;
   if (_bufferedConsumers.count) {
-    consumer = [_bufferedConsumers lastObject];
+    consumer = _bufferedConsumers.lastObject;
     [_bufferedConsumers removeLastObject];
   } else {
-    consumer = [[RCTSRIOConsumer alloc] init];
+    consumer = [RCTSRIOConsumer new];
   }
 
   [consumer setupWithScanner:scanner handler:handler bytesNeeded:bytesNeeded readToCurrentFrame:readToCurrentFrame unmaskBytes:unmaskBytes];
@@ -1522,7 +1524,7 @@ static const size_t RCTSRFrameHeaderOverhead = 32;
 
 - (NSString *)RCTSR_origin;
 {
-  NSString *scheme = [self.scheme lowercaseString];
+  NSString *scheme = self.scheme.lowercaseString;
 
   if ([scheme isEqualToString:@"wss"]) {
     scheme = @"https";
@@ -1579,7 +1581,7 @@ static NSRunLoop *networkRunLoop = nil;
 {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    networkThread = [[_RCTSRRunLoopThread alloc] init];
+    networkThread = [_RCTSRRunLoopThread new];
     networkThread.name = @"com.squareup.SocketRocket.NetworkThread";
     [networkThread start];
     networkRunLoop = networkThread.runLoop;

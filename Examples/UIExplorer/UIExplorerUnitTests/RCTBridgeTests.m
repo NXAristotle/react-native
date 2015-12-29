@@ -1,25 +1,29 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/**
+ * The examples provided by Facebook are for non-commercial testing and
+ * evaluation purposes only.
+ *
+ * Facebook reserves all rights not expressly granted.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+ * OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NON INFRINGEMENT. IN NO EVENT SHALL
+ * FACEBOOK BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN
+ * AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
 
 #import <Foundation/Foundation.h>
 #import <XCTest/XCTest.h>
 
 #import "RCTBridge.h"
+#import "RCTBridge+Private.h"
 #import "RCTBridgeModule.h"
 #import "RCTJavaScriptExecutor.h"
 #import "RCTUtils.h"
 
-@interface RCTBridge (Testing)
-
-@property (nonatomic, strong, readonly) RCTBridge *batchedBridge;
-
-- (void)_handleBuffer:(id)buffer context:(NSNumber *)context;
-- (void)setUp;
-
-@end
-
 @interface TestExecutor : NSObject <RCTJavaScriptExecutor>
 
-@property (nonatomic, readonly, copy) NSMutableDictionary *injectedStuff;
+@property (nonatomic, readonly, copy) NSMutableDictionary<NSString *, id> *injectedStuff;
 
 @end
 
@@ -42,11 +46,22 @@ RCT_EXPORT_MODULE()
   return YES;
 }
 
-- (void)executeJSCall:(__unused NSString *)name
-               method:(__unused NSString *)method
-            arguments:(__unused NSArray *)arguments
-              context:(__unused NSNumber *)executorID
-             callback:(RCTJavaScriptCallback)onComplete
+- (void)flushedQueue:(RCTJavaScriptCallback)onComplete
+{
+  onComplete(nil, nil);
+}
+
+- (void)callFunctionOnModule:(__unused NSString *)module
+                      method:(__unused NSString *)method
+                   arguments:(__unused NSArray *)args
+                    callback:(RCTJavaScriptCallback)onComplete
+{
+  onComplete(nil, nil);
+}
+
+- (void)invokeCallbackID:(__unused NSNumber *)cbID
+               arguments:(__unused NSArray *)args
+                callback:(RCTJavaScriptCallback)onComplete
 {
   onComplete(nil, nil);
 }
@@ -106,44 +121,74 @@ RCT_EXPORT_MODULE(TestModule)
 - (void)tearDown
 {
   [super tearDown];
+
   [_bridge invalidate];
+  _testMethodCalled = NO;
 }
+
+#define RUN_RUNLOOP_WHILE(CONDITION) \
+_Pragma("clang diagnostic push") \
+_Pragma("clang diagnostic ignored \"-Wshadow\"") \
+NSDate *timeout = [[NSDate date] dateByAddingTimeInterval:0.1]; \
+while ((CONDITION) && [timeout timeIntervalSinceNow] > 0) { \
+  [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:timeout]; \
+} \
+_Pragma("clang diagnostic pop")
 
 - (void)testHookRegistration
 {
   TestExecutor *executor =  [_bridge.batchedBridge valueForKey:@"_javaScriptExecutor"];
-  NSString *injectedStuff = executor.injectedStuff[@"__fbBatchedBridgeConfig"];
-  NSDictionary *moduleConfig = RCTJSONParse(injectedStuff, NULL);
-  NSDictionary *remoteModuleConfig = moduleConfig[@"remoteModuleConfig"];
-  NSDictionary *testModuleConfig = remoteModuleConfig[@"TestModule"];
-  NSDictionary *constants = testModuleConfig[@"constants"];
-  NSDictionary *methods = testModuleConfig[@"methods"];
 
-  XCTAssertNotNil(moduleConfig);
+  NSString *injectedStuff;
+  RUN_RUNLOOP_WHILE(!(injectedStuff = executor.injectedStuff[@"__fbBatchedBridgeConfig"]));
+
+  __block NSNumber *testModuleID = nil;
+  __block NSDictionary<NSString *, id> *testConstants = nil;
+  __block NSNumber *testMethodID = nil;
+
+  NSArray *remoteModuleConfig = RCTJSONParse(injectedStuff, NULL)[@"remoteModuleConfig"];
+  [remoteModuleConfig enumerateObjectsUsingBlock:^(id moduleConfig, NSUInteger i, BOOL *stop) {
+    if ([moduleConfig isKindOfClass:[NSArray class]] && [moduleConfig[0] isEqualToString:@"TestModule"]) {
+      testModuleID = @(i);
+      testConstants = moduleConfig[1];
+      testMethodID = @([moduleConfig[2] indexOfObject:@"testMethod"]);
+      *stop = YES;
+    }
+  }];
+
   XCTAssertNotNil(remoteModuleConfig);
-  XCTAssertNotNil(testModuleConfig);
-  XCTAssertNotNil(constants);
-  XCTAssertEqualObjects(constants[@"eleventyMillion"], @42);
-  XCTAssertNotNil(methods);
-  XCTAssertNotNil(methods[@"testMethod"]);
+  XCTAssertNotNil(testModuleID);
+  XCTAssertNotNil(testConstants);
+  XCTAssertEqualObjects(testConstants[@"eleventyMillion"], @42);
+  XCTAssertNotNil(testMethodID);
 }
 
 - (void)testCallNativeMethod
 {
   TestExecutor *executor =  [_bridge.batchedBridge valueForKey:@"_javaScriptExecutor"];
-  NSString *injectedStuff = executor.injectedStuff[@"__fbBatchedBridgeConfig"];
-  NSDictionary *moduleConfig = RCTJSONParse(injectedStuff, NULL);
-  NSDictionary *remoteModuleConfig = moduleConfig[@"remoteModuleConfig"];
-  NSDictionary *testModuleConfig = remoteModuleConfig[@"TestModule"];
-  NSNumber *testModuleID = testModuleConfig[@"moduleID"];
-  NSDictionary *methods = testModuleConfig[@"methods"];
-  NSDictionary *testMethod = methods[@"testMethod"];
-  NSNumber *testMethodID = testMethod[@"methodID"];
+
+  NSString *injectedStuff;
+  RUN_RUNLOOP_WHILE(!(injectedStuff = executor.injectedStuff[@"__fbBatchedBridgeConfig"]));
+
+  __block NSNumber *testModuleID = nil;
+  __block NSNumber *testMethodID = nil;
+
+  NSArray *remoteModuleConfig = RCTJSONParse(injectedStuff, NULL)[@"remoteModuleConfig"];
+  [remoteModuleConfig enumerateObjectsUsingBlock:^(id moduleConfig, NSUInteger i, __unused BOOL *stop) {
+    if ([moduleConfig isKindOfClass:[NSArray class]] && [moduleConfig[0] isEqualToString:@"TestModule"]) {
+      testModuleID = @(i);
+      testMethodID = @([moduleConfig[2] indexOfObject:@"testMethod"]);
+      *stop = YES;
+    }
+  }];
+
+  XCTAssertNotNil(testModuleID);
+  XCTAssertNotNil(testMethodID);
 
   NSArray *args = @[@1234, @5678, @"stringy", @{@"a": @1}, @42];
-  NSArray *buffer = @[@[testModuleID], @[testMethodID], @[args], @[], @1234567];
+  NSArray *buffer = @[@[testModuleID], @[testMethodID], @[args]];
 
-  [_bridge.batchedBridge _handleBuffer:buffer context:RCTGetExecutorID(executor)];
+  [_bridge.batchedBridge handleBuffer:buffer];
 
   dispatch_sync(_methodQueue, ^{
     // clear the queue
@@ -154,12 +199,12 @@ RCT_EXPORT_MODULE(TestModule)
 - (void)DISABLED_testBadArgumentsCount
 {
   //NSArray *bufferWithMissingArgument = @[@[@1], @[@0], @[@[@1234, @5678, @"stringy", @{@"a": @1}/*, @42*/]], @[], @1234567];
-  //[_bridge _handleBuffer:bufferWithMissingArgument];
+  //[_bridge handleBuffer:bufferWithMissingArgument];
   NSLog(@"WARNING: testBadArgumentsCount is temporarily disabled until we have a better way to test cases that we expect to trigger redbox errors");
 }
 
 RCT_EXPORT_METHOD(testMethod:(NSInteger)integer
-                  number:(NSNumber *)number
+                  number:(nonnull NSNumber *)number
                   string:(NSString *)string
                   dictionary:(NSDictionary *)dict
                   callback:(RCTResponseSenderBlock)callback)
@@ -173,7 +218,7 @@ RCT_EXPORT_METHOD(testMethod:(NSInteger)integer
   XCTAssertNotNil(callback);
 }
 
-- (NSDictionary *)constantsToExport
+- (NSDictionary<NSString *, id> *)constantsToExport
 {
   return @{@"eleventyMillion": @42};
 }

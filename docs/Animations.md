@@ -167,10 +167,12 @@ Input | Output
 `interpolation` also supports arbitrary easing functions, many of which are
 already implemented in the
 [`Easing`](https://github.com/facebook/react-native/blob/master/Libraries/Animation/Animated/Easing.js)
-class including quadradic, exponential, and bezier curves as well as functions
-like step and bounce.  `interpolation` also has configurable behavior for
-extrapolation, the default being `'extend'`, but `'clamp'` is also very useful
-to prevent the output value from exceeding `outputRange`.
+class including quadratic, exponential, and bezier curves as well as functions
+like step and bounce. `interpolation` also has configurable behavior for
+extrapolating the `outputRange`. You can set the extrapolation by setting the `extrapolate`, 
+`extrapolateLeft` or `extrapolateRight` options. The default value is 
+`extend` but you can use `clamp` to prevent the output value from exceeding 
+`outputRange`.
 
 #### Tracking Dynamic Values
 
@@ -205,12 +207,12 @@ map syntax so that values can be extracted from complex event objects.  The
 first level is an array to allow mapping across multiple args, and that array
 contains nested objects.  In the example, you can see that `scrollX` maps to
 `event.nativeEvent.contentOffset.x` (`event` is normally the first arg to the
-handler), and `pan.x` maps to `gestureState.dx` (`gestureState` is the second
-arg passed to the `PanResponder` handler).
+handler), and `pan.x` and `pan.y` map to `gestureState.dx` and `gestureState.dy`,
+respectively (`gestureState` is the second arg passed to the `PanResponder` handler).
 
 ```javascript
 onScroll={Animated.event(
-  [{nativeEvent: {contentOffset: {y: pan.y}}}]   // pan.y = e.nativeEvent.contentOffset.y
+  [{nativeEvent: {contentOffset: {x: scrollX}}}]   // scrollX = e.nativeEvent.contentOffset.x
 )}
 onPanResponderMove={Animated.event([
   null,                                          // ignore the native event
@@ -242,7 +244,7 @@ vertical panning.
 
 The above API gives a powerful tool for expressing all sorts of animations in a
 concise, robust, and performant way.  Check out more example code in
-[UIExplorer/AnimationExample](https://github.com/facebook/react-native/blob/master/Examples/UIExplorer/AnimationExample).  Of course there may still be times where `Animated`
+[UIExplorer/AnimationExample](https://github.com/facebook/react-native/tree/master/Examples/UIExplorer/AnimatedGratuitousApp).  Of course there may still be times where `Animated`
 doesn't support what you need, and the following sections cover other animation
 systems.
 
@@ -298,7 +300,7 @@ var App = React.createClass({
 [Run this example](https://rnplay.org/apps/uaQrGQ)
 
 This example uses a preset value, you can customize the animations as
-you need, see [LayoutAnimation.js](https://github.com/facebook/react-native/blob/master/Libraries/Animation/LayoutAnimation.js)
+you need, see [LayoutAnimation.js](https://github.com/facebook/react-native/blob/master/Libraries/LayoutAnimation/LayoutAnimation.js)
 for more information.
 
 ### requestAnimationFrame
@@ -307,10 +309,10 @@ for more information.
 familiar with. It accepts a function as its only argument and calls that
 function before the next repaint. It is an essential building block for
 animations that underlies all of the JavaScript-based animation APIs.  In
-general, you shouldn't need to call this yourself - the animation API's will
+general, you shouldn't need to call this yourself - the animation APIs will
 manage frame updates for you.
 
-### react-tween-state
+### react-tween-state (Not recommended - use [Animated](#animated) instead)
 
 [react-tween-state](https://github.com/chenglou/react-tween-state) is a
 minimal library that does exactly what its name suggests: it *tweens* a
@@ -377,7 +379,7 @@ Here we animated the opacity, but as you might guess, we can animate any
 numeric value. Read more about react-tween-state in its
 [README](https://github.com/chenglou/react-tween-state).
 
-### Rebound
+### Rebound (Not recommended - use [Animated](#animated) instead)
 
 [Rebound.js](https://github.com/facebook/rebound-js) is a JavaScript port of
 [Rebound for Android](https://github.com/facebook/rebound). It is
@@ -458,7 +460,7 @@ use this.
 
 ![](/react-native/img/Rebound.gif) Screenshot from
 [react-native-scrollable-tab-view](https://github.com/brentvatne/react-native-scrollable-tab-view).
-You can run a simlar example [here](https://rnplay.org/apps/qHU_5w).
+You can run a similar example [here](https://rnplay.org/apps/qHU_5w).
 
 #### A sidenote about setNativeProps
 
@@ -473,16 +475,13 @@ might be helpful if the component that we are updating is deeply nested
 and hasn't been optimized with `shouldComponentUpdate`.
 
 ```javascript
-// Outside of our React component
-var precomputeStyle = require('precomputeStyle');
-
 // Back inside of the App component, replace the scrollSpring listener
 // in componentWillMount with this:
 this._scrollSpring.addListener({
   onSpringUpdate: () => {
     if (!this._photo) { return }
     var v = this._scrollSpring.getCurrentValue();
-    var newProps = precomputeStyle({transform: [{scaleX: v}, {scaleY: v}]});
+    var newProps = {style: {transform: [{scaleX: v}, {scaleY: v}]}};
     this._photo.setNativeProps(newProps);
   },
 });
@@ -530,7 +529,9 @@ make them customizable, React Native exposes a
 [NavigatorSceneConfigs](https://github.com/facebook/react-native/blob/master/Libraries/CustomComponents/Navigator/NavigatorSceneConfigs.js) API.
 
 ```javascript
-var SCREEN_WIDTH = require('Dimensions').get('window').width;
+var React = require('react-native');
+var { Dimensions } = React;
+var SCREEN_WIDTH = Dimensions.get('window').width;
 var BaseConfig = Navigator.SceneConfigs.FloatFromRight;
 
 var CustomLeftToRightGesture = Object.assign({}, BaseConfig.gestures.pop, {
@@ -542,7 +543,7 @@ var CustomLeftToRightGesture = Object.assign({}, BaseConfig.gestures.pop, {
 });
 
 var CustomSceneConfig = Object.assign({}, BaseConfig, {
-  // A very tighly wound spring will make this transition fast
+  // A very tightly wound spring will make this transition fast
   springTension: 100,
   springFriction: 1,
 
@@ -556,79 +557,3 @@ var CustomSceneConfig = Object.assign({}, BaseConfig, {
 
 For further information about customizing scene transitions, [read the
 source](https://github.com/facebook/react-native/blob/master/Libraries/CustomComponents/Navigator/NavigatorSceneConfigs.js).
-
-### AnimationExperimental *(Deprecated)*
-
-As the name would suggest, this was only ever an experimental API and it
-is **not recommended to use this on your apps**. It has some rough edges
-and is not under active development. It is built on top of CoreAnimation
-explicit animations.
-
-If you choose to use it anyways, here is what you need to know:
-
-- You will need to include `RCTAnimationExperimental.xcodeproj` and add
-  `libRCTAnimationExperimental.a` to `Build Phases`.
-- Suited only for static "fire and forget" animations - not continuous gestures.
-- Hit detection will not work as expected because animations occur on
-  the presentation layer.
-
-```javascript
-var AnimationExperimental = require('AnimationExperimental');
-
-var App = React.createClass({
-  componentDidMount() {
-    AnimationExperimental.startAnimation(
-      {
-        node: this._box,
-        duration: 1000,
-        easing: 'easeInOutBack',
-        property: 'scaleXY',
-        toValue: { x: 1, y: 1 },
-      },
-    );
-  },
-
-  render() {
-    return (
-      <View style={{flex: 1, justifyContent: 'center', alignItems: 'center'}}>
-        <View ref={component => this._box = component}
-              style={{width: 200, height: 200, backgroundColor: 'red'}} />
-      </View>
-    )
-  },
-});
-```
-![](/react-native/img/AnimationExperimentalScaleXY.gif)
-
-Now to demonstrate a known issue, and one of the reasons why it is
-recommended not to use `AnimationExperimental` currently, let's try to
-animate `opacity` from 1 to 0.5:
-
-```javascript
-AnimationExperimental.startAnimation(
-  {
-    node: this._box,
-    duration: 1000,
-    easing: 'easeInOutBack',
-    property: 'opacity',
-    fromValue: 1,
-    toValue: 0.5,
-  },
-);
-```
-
-![](/react-native/img/AnimationExperimentalOpacity.gif)
-
-### Pop *(Unsupported, not recommended)*
-
-[Facebook Pop](https://github.com/facebook/pop) "supports spring and
-decay dynamic animations, making it useful for building realistic,
-physics-based interactions."
-
-This is not officially supported or recommended because the direction is
-to move towards JavaScript-driven animations, but if you must use it,
-you can find the code to integrate with React Native
-[here](https://github.com/facebook/react-native/issues/1365#issuecomment-104792251).
-Please do not open questions specific to Pop on the React Native issues,
-StackOverflow is a better place to answer those questions as it is not
-considered to be part of the core.

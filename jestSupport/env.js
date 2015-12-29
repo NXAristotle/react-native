@@ -8,7 +8,11 @@
  */
 'use strict';
 
-window.__DEV__ = true;
-window.Env = {};
+require('../packager/react-packager/src/Resolver/polyfills/babelHelpers.js');
+global.__DEV__ = true;
+global.__fbBatchedBridgeConfig = {
+  remoteModuleConfig: [],
+  localModulesConfig: [],
+};
 
-require.requireActual('./setupEnvPolyfills');
+global.Promise = require('promise');

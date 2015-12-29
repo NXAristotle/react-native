@@ -58,24 +58,24 @@ var WebViewExample = React.createClass({
     return (
       <View style={[styles.container]}>
         <View style={[styles.addressBarRow]}>
-          <TouchableOpacity onPress={this.goBack}>
-            <View style={this.state.backButtonEnabled ? styles.navButton : styles.disabledButton}>
-              <Text>
-                 {'<'}
-              </Text>
-            </View>
+          <TouchableOpacity
+            onPress={this.goBack}
+            style={this.state.backButtonEnabled ? styles.navButton : styles.disabledButton}>
+            <Text>
+               {'<'}
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={this.goForward}>
-            <View style={this.state.forwardButtonEnabled ? styles.navButton : styles.disabledButton}>
-              <Text>
-                {'>'}
-              </Text>
-            </View>
+          <TouchableOpacity
+            onPress={this.goForward}
+            style={this.state.forwardButtonEnabled ? styles.navButton : styles.disabledButton}>
+            <Text>
+              {'>'}
+            </Text>
           </TouchableOpacity>
           <TextInput
             ref={TEXT_INPUT_REF}
             autoCapitalize="none"
-            value={this.state.url}
+            defaultValue={this.state.url}
             onSubmitEditing={this.onSubmitEditing}
             onChange={this.handleTextInputChange}
             clearButtonMode="while-editing"
@@ -96,6 +96,7 @@ var WebViewExample = React.createClass({
           url={this.state.url}
           javaScriptEnabledAndroid={true}
           onNavigationStateChange={this.onNavigationStateChange}
+          onShouldStartLoadWithRequest={this.onShouldStartLoadWithRequest}
           startInLoadingState={true}
           scalesPageToFit={this.state.scalesPageToFit}
         />
@@ -116,6 +117,11 @@ var WebViewExample = React.createClass({
 
   reload: function() {
     this.refs[WEBVIEW_REF].reload();
+  },
+
+  onShouldStartLoadWithRequest: function(event) {
+    // Implement any custom loading logic here, don't forget to return!
+    return true;
   },
 
   onNavigationStateChange: function(navState) {
@@ -142,7 +148,7 @@ var WebViewExample = React.createClass({
         url: url,
       });
     }
-    // dismiss keyoard
+    // dismiss keyboard
     this.refs[TEXT_INPUT_REF].blur();
   },
 
